@@ -138,7 +138,7 @@ class ControllerPaymentirpul extends Controller {
 		}
 		$decrypted = base64_decode($data);
 		
-		$check = array('tran_id','order_id','amount','refcode','status');
+		$check = array('trans_id','order_id','amount','refcode','status');
 		foreach($check as $str){
 			str_replace($str,'',$decrypted,$count);
 			if($count > 0){
@@ -152,10 +152,10 @@ class ControllerPaymentirpul extends Controller {
 		}
 	}
 	
-	function Get_PaymentVerification($webgate_id , $tran_id , $amount){
+	function Get_PaymentVerification($webgate_id , $trans_id , $amount){
 		$parameters = array(
 			'webgate_id'	=> $webgate_id,
-			'tran_id' 		=> $tran_id,
+			'trans_id' 		=> $trans_id,
 			'amount'	 	=> $amount,
 		);
 		try {
@@ -206,7 +206,7 @@ class ControllerPaymentirpul extends Controller {
 			$decrypted 		= $this->url_decrypt($irpul_token);
 			if($decrypted['status']){
 				parse_str($decrypted['data'], $ir_output);
-				$tran_id 	= $ir_output['tran_id'];
+				$trans_id 	= $ir_output['trans_id'];
 				$order_id 	= $ir_output['order_id'];
 				$amount 	= $ir_output['amount'];
 				$refcode	= $ir_output['refcode'];
@@ -221,12 +221,12 @@ class ControllerPaymentirpul extends Controller {
 					if($status == 'paid')	
 					{
 						$webgate_id = $this->config->get('irpul_PIN');
-						$result 	= $this->Get_PaymentVerification($webgate_id,$tran_id , $amount );
+						$result 	= $this->Get_PaymentVerification($webgate_id,$trans_id , $amount );
 						if ($result == 1){
-							$data['tran_id'] = $refcode;
-							$this->model_checkout_order->addOrderHistory($order_id, $tran_id,'رسید تراکنش: $refcode ');
+							$data['trans_id'] = $refcode;
+							$this->model_checkout_order->addOrderHistory($order_id, $trans_id,'رسید تراکنش: $refcode ');
 							$data['refcode'] = $refcode;
-							$data['tran_id'] = $tran_id;
+							$data['trans_id'] = $trans_id;
 							//break;
 						}else{
 							$data['error_warning'] = 'فاکتور در سایت ایرپول پرداخت شده است اما در این سایت تایید نشد. لطفا این موضوع را به مدیر سایت اطلاع دهید. کد خطا: '. $result;

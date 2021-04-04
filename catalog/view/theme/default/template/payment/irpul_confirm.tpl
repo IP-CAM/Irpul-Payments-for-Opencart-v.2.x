@@ -22,7 +22,7 @@
 			<table class="table table-bordered table-hover">
 				<tr>
 					<td width="30%">شناسه تراکنش</td>
-					<td><?php echo isset($tran_id) ? $tran_id : ''; ?></td>
+					<td><?php echo isset($trans_id) ? $trans_id : ''; ?></td>
 				</tr>
 				<tr>
 					<td width="30%">شماره پیگیری</td>
