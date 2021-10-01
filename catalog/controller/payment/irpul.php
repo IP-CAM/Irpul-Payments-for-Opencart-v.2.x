@@ -71,9 +71,17 @@ class ControllerPaymentirpul extends Controller {
 				'address' 		=> $order_info['payment_zone'] . ' ' . $order_info['payment_city'] . ' '.  $order_info['payment_address_1'] .' '. $order_info['payment_address_2'] . ' کد پستی :' . $order_info['payment_postcode'] ,
 				'description' 	=> '',
 			);
+			
+			$stream_context_opts = array(
+				'ssl' => array(
+					'verify_peer'       => false,
+					'verify_peer_name'  => false
+				)
+			);
+			$soap_option = array('soap_version'=>SOAP_1_2, 'cache_wsdl'=>WSDL_CACHE_NONE, 'encoding'=>'UTF-8', 'stream_context'=> stream_context_create($stream_context_opts) );
 
 			try {
-				$client = new SoapClient('https://irpul.ir/webservice.php?wsdl' , array('soap_version'=>'SOAP_1_2','cache_wsdl'=>WSDL_CACHE_NONE ,'encoding'=>'UTF-8'));
+				$client = new SoapClient( 'https://irpul.ir/webservice.php?wsdl', $soap_option );
 				$result = $client->Payment($parameters);
 			}catch (Exception $e) { echo 'Error'. $e->getMessage();  }
 			
@@ -158,8 +166,17 @@ class ControllerPaymentirpul extends Controller {
 			'trans_id' 		=> $trans_id,
 			'amount'	 	=> $amount,
 		);
+		
+		$stream_context_opts = array(
+			'ssl' => array(
+				'verify_peer'       => false,
+				'verify_peer_name'  => false
+			)
+		);
+		$soap_option = array('soap_version'=>SOAP_1_2, 'cache_wsdl'=>WSDL_CACHE_NONE, 'encoding'=>'UTF-8', 'stream_context'=> stream_context_create($stream_context_opts) );
+		
 		try {
-			$client = new SoapClient('https://irpul.ir/webservice.php?wsdl' , array('soap_version'=>'SOAP_1_2','cache_wsdl'=>WSDL_CACHE_NONE ,'encoding'=>'UTF-8'));
+			$client = new SoapClient( 'https://irpul.ir/webservice.php?wsdl' , $soap_option );
 			$result = $client->PaymentVerification($parameters);
 		}catch (Exception $e) { echo 'Error'. $e->getMessage();  }
 		return $result;
