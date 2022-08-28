@@ -36,7 +36,7 @@ class ControllerPaymentirpul extends Controller {
 		
 		if ($order_info) {
 			// -----------------------------------
-			$webgate_id 	 = $this->config->get('irpul_PIN');
+			$token 	 = $this->config->get('irpul_PIN');
 
 			//$callback_url = urldecode($this->url->link('payment/irpul/callback', 's_order_id=' . $encryption->encrypt($order_id), 'SSL'));
 			$callback_url = $this->url->link('payment/irpul/callback');
@@ -58,8 +58,9 @@ class ControllerPaymentirpul extends Controller {
 			}
 				
 			$parameters = array(
-				'plugin'		=> 'OpenCart',
-				'webgate_id' 	=> $webgate_id,
+				'method' 		=> 'payment',
+				//'plugin'		=> 'OpenCart',
+				//'webgate_id' 	=> $webgate_id,
 				'order_id'		=> $order_id,
 				'product'		=> $products_name,
 				'payer_name'	=> $order_info['payment_firstname'] . ' ' . $order_info['payment_lastname'],
@@ -72,62 +73,22 @@ class ControllerPaymentirpul extends Controller {
 				'description' 	=> '',
 			);
 			
-			$stream_context_opts = array(
-				'ssl' => array(
-					'verify_peer'       => false,
-					'verify_peer_name'  => false
-				)
-			);
-			$soap_option = array('soap_version'=>SOAP_1_2, 'cache_wsdl'=>WSDL_CACHE_NONE, 'encoding'=>'UTF-8', 'stream_context'=> stream_context_create($stream_context_opts) );
+			$result = post_data('https://irpul.ir/ws.php', $parameters, $token );
 
-			try {
-				$client = new SoapClient( 'https://irpul.ir/webservice.php?wsdl', $soap_option );
-				$result = $client->Payment($parameters);
-			}catch (Exception $e) { echo 'Error'. $e->getMessage();  }
-			
-			if (is_numeric($result['res_code']) && $result['res_code']===1 ) {
-				$json['success'] = $result['url'];
-			} else {
-				if($result['res_code']=='-1'){
-					$json['error'] = "شناسه درگاه مشخص نشده است";
-				}
-				elseif($result['res_code']=='-2'){
-					$json['error'] = "شناسه درگاه صحیح نمی باشد";
-				}
-				elseif($result['res_code']=='-3'){
-					$json['error'] = "شما حساب کاربری خود را در ایرپول تایید نکرده اید";
-				}
-				elseif($result['res_code']=='-4'){
-					$json['error'] = "مبلغ قابل پرداخت تعیین نشده است";
-				}
-				elseif($result['res_code']=='-5'){
-					$json['error'] = "مبلغ قابل پرداخت صحیح نمی باشد";
-				}
-				elseif($result['res_code']=='-6'){
-					$json['error'] = "شناسه تراکنش صحیح نمی باشد";
-				}
-				elseif($result['res_code']=='-7'){
-					$json['error'] = "آدرس بازگشت مشخص نشده است";
-				}
-				elseif($result['res_code']=='-8'){
-					$json['error'] = "آدرس بازگشت صحیح نمی باشد";
-				}
-				elseif($result['res_code']=='-9'){
-					$json['error'] = "آدرس ایمیل وارد شده صحیح نمی باشد";
-				}
-				elseif($result['res_code']=='-10'){
-					$json['error'] = "شماره تلفن وارد شده صحیح نمی باشد";
-				}
-				elseif($result['res_code']=='-12'){
-					$json['error'] = "نام پلاگین (Plugin) مشخص نشده است";
-				}
-				elseif($result['res_code']=='-13'){
-					$json['error'] = "نام پلاگین (Plugin) صحیح نیست";
+			if( isset($result['http_code']) ){
+				$data =  json_decode($result['data'],true);
+
+				if( isset($data['code']) && $data['code'] === 1){
+					//ok
+					$json['success'] = $data['url'];
 				}
 				else{
 					$json['error'] = $result['res_code'] . ' '. $result['status'];
 				}
+			}else{
+				$json['error'] = "عدم دریافت پاسخ";
 			}
+			
 			// -----------------------------------
 			
 		} else {
@@ -136,36 +97,76 @@ class ControllerPaymentirpul extends Controller {
 		$this->response->setOutput(json_encode($json));
 	}
 	
-	
-	function url_decrypt($string){
-		$counter = 0;
-		$data = str_replace(array('-','_','.'),array('+','/','='),$string);
-		$mod4 = strlen($data) % 4;
-		if ($mod4) {
-		$data .= substr('====', $mod4);
+	function post_data($url,$params,$token) {
+		ini_set('default_socket_timeout', 15);
+
+		$headers = array(
+			"Authorization: token= {$token}",
+			'Content-type: application/json'
+		);
+
+		$handle = curl_init($url);
+		curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($handle, CURLOPT_CONNECTTIMEOUT, 30);
+		curl_setopt($handle, CURLOPT_TIMEOUT, 40);
+		curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($handle, CURLOPT_POSTFIELDS, json_encode($params) );
+		curl_setopt($handle, CURLOPT_HTTPHEADER, $headers );
+
+		$response = curl_exec($handle);
+		//error_log('curl response1 : '. print_r($response,true));
+
+		$msg='';
+		$http_code = intval(curl_getinfo($handle, CURLINFO_HTTP_CODE));
+
+		$status= true;
+
+		if ($response === false) {
+			$curl_errno = curl_errno($handle);
+			$curl_error = curl_error($handle);
+			$msg .= "Curl error $curl_errno: $curl_error";
+			$status = false;
 		}
-		$decrypted = base64_decode($data);
-		
-		$check = array('trans_id','order_id','amount','refcode','status');
-		foreach($check as $str){
-			str_replace($str,'',$decrypted,$count);
-			if($count > 0){
-				$counter++;
+
+		curl_close($handle);//dont move uppder than curl_errno
+
+		if( $http_code == 200 ){
+			$msg .= "Request was successfull";
+		}
+		else{
+			$status = false;
+			if ($http_code == 400) {
+				$status = true;
+			}
+			elseif ($http_code == 401) {
+				$msg .= "Invalid access token provided";
+			}
+			elseif ($http_code == 502) {
+				$msg .= "Bad Gateway";
+			}
+			elseif ($http_code >= 500) {// do not wat to DDOS server if something goes wrong
+				sleep(2);
 			}
 		}
-		if($counter === 5){
-			return array('data'=>$decrypted , 'status'=>true);
-		}else{
-			return array('data'=>'' , 'status'=>false);
+
+		$res['http_code'] 	= $http_code;
+		$res['status'] 		= $status;
+		$res['msg'] 		= $msg;
+		$res['data'] 		= $response;
+
+		if(!$status){
+			//error_log(print_r($res,true));
 		}
+		return $res;
 	}
 	
-	function Get_PaymentVerification($webgate_id , $trans_id , $amount){
+	/*function Get_PaymentVerification($webgate_id , $trans_id , $amount){
 		$parameters = array(
-			'webgate_id'	=> $webgate_id,
+			'method' 	    => 'verify',
 			'trans_id' 		=> $trans_id,
 			'amount'	 	=> $amount,
 		);
+
 		
 		$stream_context_opts = array(
 			'ssl' => array(
@@ -180,7 +181,7 @@ class ControllerPaymentirpul extends Controller {
 			$result = $client->PaymentVerification($parameters);
 		}catch (Exception $e) { echo 'Error'. $e->getMessage();  }
 		return $result;
-	}
+	}*/
 	
 	public function callback() {
 		$this->language->load('payment/irpul');
@@ -217,49 +218,63 @@ class ControllerPaymentirpul extends Controller {
 		if ($order_info) {
 		}
 		*/
+		
+		$trans_id 	= isset($this->request->post['trans_id']) ? $this->request->post['trans_id'] : '';
+		$order_id 	= isset($this->request->post['order_id']) ? $this->request->post['order_id'] : '';
+		$amount 	= isset($this->request->post['amount']) ? $this->request->post['amount'] : '';
+		$refcode 	= isset($this->request->post['refcode']) ? $this->request->post['refcode'] : '';
+		$status 	= isset($this->request->post['status']) ? $this->request->post['status'] : '';
 			
-		$irpul_token = isset($this->request->get['irpul_token']) ? $this->request->get['irpul_token'] : '';
-		if ( isset($irpul_token) && $irpul_token!='' ) {
-			$decrypted 		= $this->url_decrypt($irpul_token);
-			if($decrypted['status']){
-				parse_str($decrypted['data'], $ir_output);
-				$trans_id 	= $ir_output['trans_id'];
-				$order_id 	= $ir_output['order_id'];
-				$amount 	= $ir_output['amount'];
-				$refcode	= $ir_output['refcode'];
-				$status 	= $ir_output['status'];
+		//بررسی وجود سفارش
+		$order_info = $this->model_checkout_order->getOrder($order_id);
+		if ($order_info) {
+			$amount = $this->currency->format($order_info['total'], $order_info['currency_code'], false, false);
+			$amount = $this->currency->convert($amount, $order_info['currency_code'], "TOM" ) * 10;
+			$orderId 	= $order_info['order_id'];
+			
+			if($status == 'paid'){
+				$token = $this->config->get('irpul_PIN');
 				
-				//بررسی وجود سفارش
-				$order_info = $this->model_checkout_order->getOrder($order_id);
-				if ($order_info) {
-					$amount = $this->currency->format($order_info['total'], $order_info['currency_code'], false, false);
-					$amount = $this->currency->convert($amount, $order_info['currency_code'], "TOM" ) * 10;
-					$orderId 	= $order_info['order_id'];
-					if($status == 'paid')	
-					{
-						$webgate_id = $this->config->get('irpul_PIN');
-						$result 	= $this->Get_PaymentVerification($webgate_id,$trans_id , $amount );
-						if ($result == 1){
+				$parameters = array(
+					'method' 	    => 'verify',
+					'trans_id' 		=> $trans_id,
+					'amount'	 	=> $amount,
+				);
+				
+				$result =  post_data('https://irpul.ir/ws.php', $parameters, $token );
+				
+				if( isset($result['http_code']) ){
+					$data =  json_decode($result['data'],true);
+
+					if( isset($data['code']) && $data['code'] === 1){
+						$irpul_amount  = $data['amount'];
+						
+						if($amount == $irpul_amount){
 							$data['trans_id'] = $refcode;
 							$this->model_checkout_order->addOrderHistory($order_id, $trans_id,'رسید تراکنش: $refcode ');
 							$data['refcode'] = $refcode;
 							$data['trans_id'] = $trans_id;
 							//break;
-						}else{
-							$data['error_warning'] = 'فاکتور در سایت ایرپول پرداخت شده است اما در این سایت تایید نشد. لطفا این موضوع را به مدیر سایت اطلاع دهید. کد خطا: '. $result;
+						}
+						else{
+							$data['error_warning']	= 'مبلغ تراکنش در ایرپول (' . number_format($irpul_amount) . ' تومان) تومان با مبلغ تراکنش در سیمانت (' . number_format($amount) . ' تومان) برابر نیست';
 						}
 					}
 					else{
-						$data['error_warning'] = 'فاکتور پرداخت نشده است !';
+						$data['error_warning']	= 'خطا در پرداخت. کد خطا: ' . $data['code'] . '<br/> ' . $data['status'];
 					}
-				}
-				else{
-					$data['error_warning'] = 'خطا: سفارش مورد نظر یافت نشد!';
+				}else{
+					$data['error_warning']	= "پاسخی از سرویس دهنده دریافت نشد. لطفا دوباره تلاش نمائید";
 				}
 			}
-			else {
-				$data['error_warning'] = 'خطا: کد وضعیت بازگشتی نادرست است!';
+			else{
+				$data['error_warning'] = 'فاکتور پرداخت نشده است !';
 			}
+		}
+		else{
+			$data['error_warning'] = 'خطا: سفارش مورد نظر یافت نشد!';
+		}
+
 		}else{
 			$data['error_warning'] = 'توکن ایرپول موجود نیست !';
 		}
